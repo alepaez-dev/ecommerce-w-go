@@ -5,7 +5,7 @@ Clean Architecture
 ### Product
 - id
 - name
-- price
+- price_in_cents
 - quantity
 - created_at
 - updated_at
