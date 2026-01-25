@@ -7,9 +7,11 @@ import (
 
 	"github.com/alepaez-dev/ecommerce/internal/env"
 	"github.com/jackc/pgx/v5"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	_ = godotenv.Load()
 
 	// Configuration
 	ctx := context.Background()
@@ -31,7 +33,7 @@ func main() {
 	logger.Info("database connection established")
 
 	// Api
-	api := application{config: cfg}
+	api := application{config: cfg, db: conn}
 	if err := api.run(api.mount()); err != nil {
 		slog.Error("server failed to start: ", "error", err)
 		os.Exit(1)

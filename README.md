@@ -30,7 +30,7 @@ Clean Architecture
 - product_id
 - order_id
 - quantity
-- price
+- price_in_cents
 - created_at
 - updated_at
 
