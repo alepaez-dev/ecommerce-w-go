@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	repo "github.com/alepaez-dev/ecommerce/internal/adapters/postgresql/sqlc"
-	"github.com/jackc/pgx/v5"
 )
 
 var (
@@ -19,12 +18,12 @@ type Service interface {
 }
 
 type svc struct {
-	repo *repo.Queries
-	db   *pgx.Conn
+	txManager TxManager
+	products  ProductStoreFactory
 }
 
-func NewService(repo *repo.Queries, db *pgx.Conn) Service {
-	return &svc{repo: repo, db: db}
+func NewService(txManager TxManager, products ProductStoreFactory) Service {
+	return &svc{txManager: txManager, products: products}
 }
 
 func (s *svc) PlaceOrder(ctx context.Context, tempOrder createOrderParams) (repo.Order, error) {
@@ -35,40 +34,46 @@ func (s *svc) PlaceOrder(ctx context.Context, tempOrder createOrderParams) (repo
 		return repo.Order{}, fmt.Errorf("at least one item is required")
 	}
 
-	tx, err := s.db.Begin(ctx)
+	var createdOrder repo.Order
+	err := s.txManager.WithTx(ctx, func(q repo.Querier) error {
+		productStore := s.products(q)
+
+		order, err := q.CreateOrder(ctx, tempOrder.CustomerID)
+		if err != nil {
+			return err
+		}
+
+		for _, item := range tempOrder.Items {
+			product, err := productStore.FindProduct(ctx, item.ProductID)
+			if err != nil {
+				return ErrProductNotFound
+			}
+
+			if product.Quantity < item.Quantity {
+				return ErrProductNoStock
+			}
+
+			if _, err := productStore.DecrementStock(ctx, item.ProductID, item.Quantity); err != nil {
+				return err
+			}
+
+			if _, err := q.CreateOrderItem(ctx, repo.CreateOrderItemParams{
+				OrderID:      order.ID,
+				ProductID:    item.ProductID,
+				Quantity:     item.Quantity,
+				PriceInCents: product.PriceInCents,
+			}); err != nil {
+				return err
+			}
+		}
+
+		createdOrder = order
+		return nil
+	})
+
 	if err != nil {
 		return repo.Order{}, err
 	}
-	defer tx.Rollback(ctx)
 
-	qtx := s.repo.WithTx(tx)
-
-	order, err := qtx.CreateOrder(ctx, tempOrder.CustomerID)
-	if err == nil {
-		return repo.Order{}, err
-	}
-
-	for _, item := range tempOrder.Items {
-		product, err := s.repo.FindProductByID(ctx, item.ProductID)
-		if err != nil {
-			return repo.Order{}, ErrProductNotFound
-		}
-
-		if product.Quantity < item.Quantity {
-			return repo.Order{}, ErrProductNoStock
-		}
-
-		_, err = qtx.CreateOrderItem(ctx, repo.CreateOrderItemParams{
-			OrderID:      order.ID,
-			ProductID:    item.ProductID,
-			Quantity:     item.Quantity,
-			PriceInCents: product.PriceInCents,
-		})
-
-		if err != nil {
-			return repo.Order{}, err
-		}
-	}
-
-	return order, nil
+	return createdOrder, nil
 }

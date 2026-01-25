@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/alepaez-dev/ecommerce/internal/adapters/postgresql"
 	repo "github.com/alepaez-dev/ecommerce/internal/adapters/postgresql/sqlc"
 	"github.com/alepaez-dev/ecommerce/internal/orders"
 	"github.com/alepaez-dev/ecommerce/internal/products"
@@ -35,7 +36,12 @@ func (app *application) mount() http.Handler {
 	r.Get("/products/{id}", productHandler.FindProduct)
 
 	// Orders
-	orderService := orders.NewService(repo.New(app.db), app.db)
+	txManager := postgresql.NewTxManager(app.db)
+
+	productFactory := func(q repo.Querier) orders.ProductStore {
+		return products.NewService(q)
+	}
+	orderService := orders.NewService(txManager, productFactory)
 	orderHandler := orders.NewHandler(orderService)
 	r.Post("/orders", orderHandler.PlaceOrder)
 
