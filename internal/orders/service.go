@@ -11,6 +11,7 @@ import (
 var (
 	ErrProductNotFound = errors.New("product not found")
 	ErrProductNoStock  = errors.New("product has not enough stock")
+	ErrRequiredValue   = errors.New("is required")
 )
 
 type Service interface {
@@ -28,10 +29,10 @@ func NewService(txManager TxManager, products ProductStoreFactory) Service {
 
 func (s *svc) PlaceOrder(ctx context.Context, tempOrder createOrderParams) (repo.Order, error) {
 	if tempOrder.CustomerID == 0 {
-		return repo.Order{}, fmt.Errorf("customer ID is required")
+		return repo.Order{}, fmt.Errorf("%w customer ID is required", ErrRequiredValue)
 	}
 	if len(tempOrder.Items) == 0 {
-		return repo.Order{}, fmt.Errorf("at least one item is required")
+		return repo.Order{}, fmt.Errorf("at least one item %w", ErrRequiredValue)
 	}
 
 	var createdOrder repo.Order
@@ -46,11 +47,11 @@ func (s *svc) PlaceOrder(ctx context.Context, tempOrder createOrderParams) (repo
 		for _, item := range tempOrder.Items {
 			product, err := productStore.FindProduct(ctx, item.ProductID)
 			if err != nil {
-				return ErrProductNotFound
+				return fmt.Errorf("%w (product_id=%d)", ErrProductNotFound, item.ProductID)
 			}
 
 			if product.Quantity < item.Quantity {
-				return ErrProductNoStock
+				return fmt.Errorf("%w (product_id=%d)", ErrProductNoStock, item.ProductID)
 			}
 
 			if _, err := productStore.DecrementStock(ctx, item.ProductID, item.Quantity); err != nil {

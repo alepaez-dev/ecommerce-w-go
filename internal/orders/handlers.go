@@ -1,6 +1,7 @@
 package orders
 
 import (
+	"errors"
 	"log"
 	"net/http"
 
@@ -29,12 +30,19 @@ func (h *handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("error reading creating order %s", err)
 
-		if err == ErrProductNotFound {
-			http.Error(w, err.Error(), http.StatusNotFound)
+		if errors.Is(err, ErrRequiredValue) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 
-		if err == ErrProductNoStock {
+		if errors.Is(err, ErrProductNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+
+		if errors.Is(err, ErrProductNoStock) {
 			http.Error(w, err.Error(), http.StatusConflict)
+			return
 		}
 
 		http.Error(w, "There was an error creating the order", http.StatusInternalServerError)

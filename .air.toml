@@ -1,0 +1,9 @@
+root = "."
+
+[build]
+  cmd = "go build -o ./tmp/main ./cmd"
+  bin = "tmp/main"
+  delay = 1000
+  exclude_dir = ["tmp", "vendor"]
+  include_ext = ["go", "tpl", "tmpl", "html"]
+  log = "build-errors.log"
